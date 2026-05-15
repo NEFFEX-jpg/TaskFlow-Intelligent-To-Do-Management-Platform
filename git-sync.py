@@ -112,7 +112,7 @@ def check_github():
         ok("GitHub 连通正常")
         return True
     # 再试 git ls-remote
-    code, out, err = run("git ls-remote --heads origin")
+    code, out, err = run("git ls-remote --heads")
     if code == 0:
         ok("GitHub 连通正常 (via git)")
         return True
@@ -147,7 +147,20 @@ def git_commit(msg):
 
 
 def git_push():
-    """推送，自动重试"""
+    """推送，自动 pull --rebase 并重试"""
+    # 先拉取远程最新并 rebase，避免 non-fast-forward
+    info("同步远程分支 (pull --rebase)...")
+    code, out, err = run("git pull --rebase")
+    if code != 0:
+        warn(f"pull --rebase 失败: {err[:200]}")
+        # 尝试 stash 后重试
+        run("git stash")
+        code2, _, _ = run("git pull --rebase")
+        run("git stash pop")
+        if code2 != 0:
+            fail("无法同步远程分支，请手动解决冲突")
+            return False
+
     for attempt in range(1, MAX_RETRIES + 1):
         info(f"推送中... (第 {attempt}/{MAX_RETRIES} 次)")
         code, out, err = run("git push")

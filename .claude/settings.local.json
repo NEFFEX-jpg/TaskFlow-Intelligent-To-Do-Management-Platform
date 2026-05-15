@@ -14,7 +14,11 @@
       "Bash(git reset *)",
       "Bash(ping -n 2 github.com)",
       "Bash(git pushf *)",
-      "Bash(python git-sync.py \"test auto-sync script\")"
+      "Bash(python git-sync.py \"test auto-sync script\")",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(powershell *)"
     ]
   }
 }
