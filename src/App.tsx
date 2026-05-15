@@ -18,7 +18,7 @@ const STORAGE_KEY = 'todos'
 function loadTodos(): Todo[] {
   try {
     const raw: Todo[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-    return raw.map(t => ({ important: false, ...t }))
+    return raw.map(t => ({ ...t, important: t.important ?? false }))
   } catch {
     return []
   }
@@ -41,37 +41,60 @@ async function decomposeTask(task: string): Promise<string[]> {
   const baseUrl = import.meta.env.VITE_MIMO_BASE_URL
   if (!apiKey) throw new Error('请在 .env 中配置 VITE_MIMO_API_KEY')
 
+  const requestBody = {
+    model: 'mimo-v2.5-pro',
+    temperature: 0.3,
+    messages: [
+      {
+        role: 'system',
+        content: '你是一个任务拆解助手。用户会给出一个任务描述，请将其拆解为若干具体的子任务步骤。只返回一个 JSON 字符串数组，不要包含其他内容。例如：["子任务1", "子任务2", "子任务3"]',
+      },
+      { role: 'user', content: task },
+    ],
+  }
+
+  console.log('%c[TaskFlow AI] ═══════════════════════════════', 'color: #6C5CE7; font-weight: bold')
+  console.log('%c[TaskFlow AI] >>> 用户输入:', 'color: #00B894; font-weight: bold', `"${task}"`)
+  console.log('%c[TaskFlow AI] >>> 调用 Mimo-v2.5-pro API...', 'color: #00B894; font-weight: bold')
+  console.log('%c[TaskFlow AI] >>> 请求地址:', 'color: #636E72', `${baseUrl}/chat/completions`)
+  console.log('%c[TaskFlow AI] >>> System Prompt:', 'color: #636E72', requestBody.messages[0].content)
+  console.log('%c[TaskFlow AI] >>> 请求参数:', 'color: #636E72', JSON.stringify(requestBody, null, 2))
+
+  const startTime = performance.now()
+
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: 'mimo-v2.5-pro',
-      temperature: 0.3,
-      messages: [
-        {
-          role: 'system',
-          content: '你是一个任务拆解助手。用户会给出一个任务描述，请将其拆解为若干具体的子任务步骤。只返回一个 JSON 字符串数组，不要包含其他内容。例如：["子任务1", "子任务2", "子任务3"]',
-        },
-        { role: 'user', content: task },
-      ],
-    }),
+    body: JSON.stringify(requestBody),
   })
 
   if (!res.ok) {
     const text = await res.text()
+    console.log('%c[TaskFlow AI] ✗ API 请求失败:', 'color: #D63031; font-weight: bold', res.status, text)
     throw new Error(`API 请求失败 (${res.status}): ${text}`)
   }
 
   const data = await res.json()
+  const elapsed = (performance.now() - startTime).toFixed(0)
   const content: string = data.choices?.[0]?.message?.content ?? ''
+
+  console.log('%c[TaskFlow AI] <<< 模型原始响应:', 'color: #E17055; font-weight: bold', `"${content}"`)
+  console.log('%c[TaskFlow AI] <<< 响应耗时:', 'color: #636E72', `${elapsed}ms`)
+
   const cleaned = content.replace(/```json\n?|```/g, '').trim()
   const parsed = JSON.parse(cleaned)
   if (!Array.isArray(parsed) || !parsed.every(s => typeof s === 'string')) {
+    console.log('%c[TaskFlow AI] ✗ 格式校验失败，期望字符串数组', 'color: #D63031; font-weight: bold')
     throw new Error('API 返回格式不正确，期望字符串数组')
   }
+
+  console.log('%c[TaskFlow AI] ✓ JSON 解析成功:', 'color: #00B894; font-weight: bold', parsed)
+  console.log('%c[TaskFlow AI] ✓ 成功拆解为', 'color: #00B894; font-weight: bold', parsed.length, '个子任务')
+  console.log('%c[TaskFlow AI] ═══════════════════════════════', 'color: #6C5CE7; font-weight: bold')
+
   return parsed
 }
 
@@ -118,10 +141,12 @@ export default function App() {
       const now = Date.now()
       const date = dateRef.current?.value || undefined
       const time = timeRef.current?.value || undefined
-      setTodos(prev => [
-        ...prev,
-        ...subtasks.map((t, i) => ({ id: now + i, text: t, done: false, important: false, date, time })),
-      ])
+      const newTodos = subtasks.map((t, i) => ({ id: now + i, text: t, done: false, important: false, date, time }))
+      setTodos(prev => [...prev, ...newTodos])
+      console.log('%c[TaskFlow AI] → 子任务已写入待办列表:', 'color: #0984E3; font-weight: bold')
+      newTodos.forEach((t, i) => {
+        console.log(`%c[TaskFlow AI]   ${i + 1}. ${t.text}`, 'color: #0984E3')
+      })
       input.value = ''
       if (dateRef.current) dateRef.current.value = ''
       if (timeRef.current) timeRef.current.value = ''
@@ -163,7 +188,6 @@ export default function App() {
 
   const total = todos.length
   const doneCount = todos.filter(t => t.done).length
-  const activeCount = total - doneCount
   const importantCount = todos.filter(t => t.important).length
 
   // Calendar data

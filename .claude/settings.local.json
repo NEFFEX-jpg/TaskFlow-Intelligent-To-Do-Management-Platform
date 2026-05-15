@@ -6,7 +6,8 @@
       "mcp__ide__getDiagnostics",
       "Bash(npx tsc *)",
       "Bash(npm run *)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git push *)"
     ]
   }
 }
