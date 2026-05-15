@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(start *)",
+      "Bash(npm install *)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "WebSearch"
+    ]
+  }
+}
